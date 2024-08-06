@@ -32,7 +32,8 @@ async function main() {
     .option('--router02 <router02>', "router02 address", "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf")
     .option('--amount <amount>', "amount of synthetic token to quote", String(100000000))
     .option('--chainid <chainID>', "chain id", String(45207))
-    .addOption(new Option('--pool-fee', "pool fee").choices(['lowest', 'low', 'medium', 'high']))
+    .addOption(new Option('--pool-fee <poolFee>', "pool fee").choices(['lowest', 'low', 'medium', 'high']))
+    .addOption(new Option('--direction <direction>', "swap direction, weth -> synthetic or synthetic to weth").choices(['weth-syn', 'syn-weth']))
     .parse()
 
   const opts = program.opts()
@@ -54,7 +55,7 @@ async function main() {
         poolFee = FeeAmount.LOW
   }
   const chainID = parseInt(opts.chainid)
-  const amountIn = parseInt(opts.amount as string)
+  const amountIn = parseInt(opts.amount)
 
   const network = new ethers.Network(`chain${chainID}`, chainID);
   const provider = new ethers.JsonRpcProvider(opts.rpcUrl, network, {
@@ -81,23 +82,33 @@ async function main() {
   console.log(`starting balances: Synthetic(${startBalanceSyn}) WETH(${startBalanceWeth})`)
 
   // get a quote: check how much we can swap from the amount of synthetic token
-  const tokenIn = new Token(chainID, opts.synthetic, 18)
-  const tokenOut = new Token(chainID, opts.weth, 18)
+  const tokenSyn = new Token(chainID, opts.synthetic, 18)
+  const tokenWeth = new Token(chainID, opts.weth, 18)
   const pool = new Pool(
-      tokenIn, 
-      tokenOut, 
+      tokenSyn, 
+      tokenWeth, 
       poolFee, 
       slot0.sqrtPriceX96.toString(),
       liquidity.toString(),
       Number(slot0.tick)
   )
 
+  let tokenIn: Token;
+  let tokenOut: Token;
+  if(opts.direction == 'weth-syn') {
+    tokenIn = tokenWeth;
+    tokenOut = tokenSyn;
+  } else {
+    tokenIn = tokenSyn;
+    tokenOut = tokenWeth;
+  }
+
   const swapRoute = new Route([pool], tokenIn, tokenOut)
   const amountOut = await getOutputQuote(provider, opts.quoter, swapRoute, tokenIn, amountIn)
   console.log(`amount of WETH can swap ${amountOut}`)
 
   // approve token in
-  const tokenInContract = new ethers.Contract(opts.synthetic, ERC20ABI, signer);
+  const tokenInContract = new ethers.Contract(tokenIn.address, ERC20ABI, signer);
   const txApprove: ethers.TransactionResponse = await tokenInContract.approve(opts.router02, amountIn, {
     nonce: startingNonce
   })
@@ -108,8 +119,8 @@ async function main() {
   // swap Synthetic token to WETH
   const router02 = new ethers.Contract(opts.router02, Router02ABI, signer);
   const params: ExactInputSingleParams = {
-    tokenIn: opts.synthetic,
-    tokenOut: opts.weth,
+    tokenIn: tokenIn.address,
+    tokenOut: tokenOut.address,
     fee: poolFee,
     recipient: await signer.getAddress(),
     amountIn: amountIn,

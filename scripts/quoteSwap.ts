@@ -15,7 +15,8 @@ async function main() {
     .option('--synthetic <synAddr>', "synthetic token address", "0x4A679253410272dd5232B3Ff7cF5dbB88f295319")
     .option('--amount <amount>', "amount of synthetic token to quote", String(100000000))
     .option('--chainid <chainID>', "chain id", String(45207))
-    .addOption(new Option('--pool-fee', "pool fee").choices(['lowest', 'low', 'medium', 'high']))
+    .addOption(new Option('--pool-fee <poolFee>', "pool fee").choices(['lowest', 'low', 'medium', 'high']))
+    .addOption(new Option('--direction <direction>', "swap direction, weth -> synthetic or synthetic to weth").choices(['weth-syn', 'syn-weth']))
     .parse()
 
   const opts = program.opts()
@@ -63,16 +64,26 @@ async function main() {
   const [liquidity, slot0] = await Promise.all([poolContract.liquidity(), poolContract.slot0()])
 
   // get a quote: check how much we can swap from the amount of synthetic token
-  const tokenIn = new Token(chainID, synAddr, 18)
-  const tokenOut = new Token(chainID, wethAddr, 18)
+  const tokenSyn = new Token(chainID, synAddr, 18)
+  const tokenWeth = new Token(chainID, wethAddr, 18)
   const pool = new Pool(
-      tokenIn, 
-      tokenOut, 
+      tokenSyn, 
+      tokenWeth, 
       poolFee, 
       slot0.sqrtPriceX96.toString(),
       liquidity.toString(),
       Number(slot0.tick)
   )
+  let tokenIn: Token;
+  let tokenOut: Token;
+  if(opts.direction == 'weth-syn') {
+    tokenIn = tokenWeth;
+    tokenOut = tokenSyn;
+  } else {
+    tokenIn = tokenSyn;
+    tokenOut = tokenWeth;
+  }
+  
 
   const swapRoute = new Route([pool], tokenIn, tokenOut)
   const amountOut = await getOutputQuote(provider, opts.quoter as string, swapRoute, tokenIn, amount2qoute)

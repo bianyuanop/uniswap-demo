@@ -20,9 +20,9 @@ async function main() {
         .option('--factory <facAddr>', "factory address", "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E")
         .option('--nftpm <nonFungibleTokenManager>', "unfungible token position manager", "0xf5059a5D33d5853360D16C683c16e67980206f36")
         .option('--chainid <chainID>', "chain id", String(45207))
-        .option('--amount-weth <amountWeth>', "amount of weth to add", String(10000))
-        .option('--amount-syn <amountSyn>', "amount of synthetic token to add", String(10000))
-        .addOption(new Option('--pool-fee', "pool fee").choices(['lowest', 'low', 'medium', 'high']))
+        .option('--amount-weth <amountWeth>', "amount of weth to add", String(100000))
+        .option('--amount-syn <amountSyn>', "amount of synthetic token to add", String(100000))
+        .addOption(new Option('--pool-fee <poolFee>', "pool fee").choices(['lowest', 'low', 'medium', 'high']))
         .parse()
     const opts = program.opts()
     const chainID = parseInt(opts.chainid);
@@ -59,15 +59,15 @@ async function main() {
         poolAddress = await createPool(uniswapFactory, opts.weth, opts.synthetic, poolFee)
 
         // 1 weth to swap 1 synthetic or vice versa
-        const price = encodeSqrtRatioX96(10, 1);
+        const price = encodeSqrtRatioX96(parseInt(opts.amountWeth), parseInt(opts.amountSyn));
         await initializePool(poolAddress, price, signer);
     }
     console.log(`pool address: ${poolAddress}`)
 
     const token0 = new ethers.Contract(opts.weth, ERC20ABI, signer);
     const token1 = new ethers.Contract(opts.synthetic, ERC20ABI, signer);
-    const amount0 = ethers.parseUnits(opts.amountWeth, 18);
-    const amount1 = ethers.parseUnits(opts.amountSyn, 18);
+    const amount0 = BigInt(opts.amountWeth)
+    const amount1 = BigInt(opts.amountSyn)
     await token0.approve(opts.nftpm, amount0);
     await token1.approve(opts.nftpm, amount1);
 
